@@ -2,23 +2,29 @@ import csv
 import logging
 import requests
 import json
-from config import ZABBIX_SERVER, ZABBIX_USER, ZABBIX_PASSWORD
+from config import ZABBIX_CREDENTIALS
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class ZabbixClient:
     def __init__(self):
-        self.base_url = f"{ZABBIX_SERVER}/api_jsonrpc.php"
-        self.auth_token = self._login()
+        self.base_url = f"{ZABBIX_CREDENTIALS['url']}/api_jsonrpc.php"
+        self.auth_token = None
+        if 'token' in ZABBIX_CREDENTIALS:
+            self.auth_token = ZABBIX_CREDENTIALS['token']
+        elif all(k in ZABBIX_CREDENTIALS for k in ('user', 'password')):
+            self.auth_token = self._login()
+        else:
+            raise Exception("Invalid Zabbix credentials provided")
 
     def _login(self):
         login_data = {
             "jsonrpc": "2.0",
             "method": "user.login",
             "params": {
-                "user": ZABBIX_USER,
-                "password": ZABBIX_PASSWORD
+                "user": ZABBIX_CREDENTIALS['user'],
+                "password": ZABBIX_CREDENTIALS['password']
             },
             "id": 1
         }
@@ -32,14 +38,17 @@ class ZabbixClient:
             raise Exception("Login failed")
 
     def _api_call(self, method, params):
+        headers = {"Content-Type": "application/json-rpc"}
+        if 'token' in ZABBIX_CREDENTIALS:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
         data = {
             "jsonrpc": "2.0",
             "method": method,
             "params": params,
-            "auth": self.auth_token,
+            "auth": None if 'token' in ZABBIX_CREDENTIALS else self.auth_token,
             "id": 1
         }
-        response = requests.post(self.base_url, json=data)
+        response = requests.post(self.base_url, json=data, headers=headers)
         result = response.json()
         if 'result' in result:
             return result['result']
@@ -145,7 +154,7 @@ class ZabbixClient:
                     "name": row["name"],
                     "hostid": host_id,
                     "delay": row.get("delay", "60s"),
-                    "attempts": 5,
+                    "retries": 5,
                     "agent": row.get("agent", "Mozilla/5.0"),
                     "steps": steps
                 }
@@ -178,16 +187,16 @@ if __name__ == "__main__":
     zabbix_client = ZabbixClient()
 
 ################ export ####################
-    # host_name = "iworks-1"
+    # host_name = "iworks-4"
     # web_scenario_csv = host_name + "_web_scenarios.csv"
     # trigger_csv = host_name + "_triggers.csv"
     # zabbix_client.export_web_scenarios_and_triggers_to_csv(host_name, web_scenario_csv, trigger_csv)
 
 
 ################ import ####################
-    host_name = "iworks-1"
-    web_scenario_csv = "iworks-1_web_scenarios.csv"
-    trigger_csv = "iworks-1_triggers.csv"
+    host_name = "iworks-4"
+    web_scenario_csv = "iworks-4_web_scenarios.csv"
+    trigger_csv = "iworks-4_triggers.csv"
     
     zabbix_client.import_web_scenarios_from_csv(host_name, web_scenario_csv)
     zabbix_client.import_triggers_from_csv(host_name, trigger_csv)
