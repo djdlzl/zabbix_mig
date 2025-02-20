@@ -182,6 +182,46 @@ class ZabbixClient:
                 self._api_call("trigger.create", params)
                 logger.info(f"Added trigger: {row['name']}")
 
+
+    def update_web_scenario_timeout(self, host_name, timeout="60s"):
+        """
+        특정 호스트의 모든 웹 시나리오의 타임아웃을 변경하는 메서드
+        """
+        host = self._api_call("host.get", {"filter": {"host": host_name}, "output": ["hostid"]})
+        if not host:
+            logger.error(f"Host {host_name} not found")
+            return
+        host_id = host[0]["hostid"]
+        
+        web_scenarios = self._api_call("httptest.get", {"hostids": host_id, "output": ["httptestid", "name", "steps"], "selectSteps": ["name", "url", "timeout"]})
+        
+        for scenario in web_scenarios:
+            steps = scenario["steps"]
+            for step in steps:
+                step["timeout"] = timeout
+            params = {
+                "httptestid": scenario["httptestid"],
+                "steps": steps,
+                "delay": "1m"
+            }
+            self._api_call("httptest.update", params)
+            logger.info(f"Updated timeout to {timeout} for web scenario: {scenario['name']}")
+    
+    def enable_manual_close_triggers(self, host_name):
+        """
+        특정 호스트의 모든 트리거에서 장애 클로즈를 수동으로 변경하는 메서드
+        """
+        triggers = self._api_call("trigger.get", {"host": host_name, "output": ["triggerid", "description", "manual_close"]})
+        
+        for trigger in triggers:
+            params = {
+                "triggerid": trigger["triggerid"],
+                "manual_close": 1
+            }
+            self._api_call("trigger.update", params)
+            logger.info(f"Enabled manual close for trigger: {trigger['description']}")
+
+
 # 사용 예시
 if __name__ == "__main__":
     zabbix_client = ZabbixClient()
@@ -194,10 +234,16 @@ if __name__ == "__main__":
 
 
 ################ import ####################
-    host_name = "iworks-4"
-    web_scenario_csv = "iworks-4_web_scenarios.csv"
-    trigger_csv = "iworks-4_triggers.csv"
+    # host_name = "iworks-4"
+    # web_scenario_csv = "iworks-4_web_scenarios.csv"
+    # trigger_csv = "iworks-4_triggers.csv"
     
-    zabbix_client.import_web_scenarios_from_csv(host_name, web_scenario_csv)
-    zabbix_client.import_triggers_from_csv(host_name, trigger_csv)
+    # zabbix_client.import_web_scenarios_from_csv(host_name, web_scenario_csv)
+    # zabbix_client.import_triggers_from_csv(host_name, trigger_csv)
     
+    
+################ update ####################
+    for i in range(1,5):
+        host_name = "iworks-"+str(i)
+        zabbix_client.update_web_scenario_timeout(host_name, "60s")
+        zabbix_client.enable_manual_close_triggers(host_name)
