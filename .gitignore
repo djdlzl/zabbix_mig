@@ -1,3 +1,4 @@
 .env
 iworks*
 *bak
+__pycache*
